@@ -454,10 +454,13 @@ async function loadJobs() {
   const doc = new DOMParser().parseFromString(listing, 'text/html')
   const ids = [...doc.querySelectorAll('a')]
     .map((a) => decodeURIComponent(a.getAttribute('href')))
-    .filter((h) => h.endsWith('/'))
+    .filter((h) => h.endsWith('/') && !h.startsWith('.'))
     .map((h) => h.slice(0, -1))
     .sort()
-  return Promise.all(ids.map(async (id) => JSON.parse(await fetchText(`jobs/${id}/job.json`))))
+  const jobs = await Promise.all(ids.map(async (id) => {
+    try { return JSON.parse(await fetchText(`jobs/${id}/job.json`)) } catch { return null }
+  }))
+  return jobs.filter(Boolean)
 }
 
 // ---- Drawer --------------------------------------------------------------
