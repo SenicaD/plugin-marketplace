@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "matcher": "factory:builder",
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/factory-gate\" --hook" }
+        ]
+      }
+    ]
+  }
+}

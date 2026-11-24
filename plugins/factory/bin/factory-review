@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Where does the factory churn? Stats over finished and running jobs.
+
+Usage: review [--all | --since-last] [--out <file>]
+
+--all (default)  every job on record
+--since-last     jobs that changed since the previous review (first run: all)
+
+Reads job.json, events.jsonl (when the job has one), round-N/checks.md,
+round-N/review-*.md, decision.md and feedback-*.md. Prints a markdown report
+and, with --out, also writes it there. Records the run time in
+factory/reports/.last-review. Read-only for jobs: nothing here changes a job.
+"""
+
+import json
+import re
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from factory_env import REPO, FACTORY, CONFIG, PLUGIN_BIN  # noqa: E402
+JOBS = FACTORY / "jobs"
+MARKER = FACTORY / "reports" / ".last-review"
+
+
+def first(path):
+    try:
+        return path.read_text().split("\n", 1)[0].strip()
+    except OSError:
+        return None
+
+
+def ts(s):
+    return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+
+
+def load_jobs(since):
+    jobs = []
+    for p in sorted(JOBS.glob("*/job.json")):
+        j = json.loads(p.read_text())
+        if since and ts(j.get("updated_at", j["started"])) <= since and j["stage"] in {"merged", "rejected"}:
+            continue
+        j["dir"] = p.parent
+        jobs.append(j)
+    return jobs
+
+
+def rounds(j):
+    out = []
+    for rd in sorted(j["dir"].glob("round-*"), key=lambda p: int(p.name.split("-")[1])):
+        n = int(rd.name.split("-")[1])
+        gate = None
+        if (rd / "checks.md").exists():
+            m = re.match(r"GATE:\s*(\w+)", first(rd / "checks.md") or "")
+            gate = m.group(1) if m else None
+        verdicts = {}
+        for r in rd.glob("review-*.md"):
+            m = re.match(r"VERDICT:\s*(PASS|CHANGES)", first(r) or "")
+            verdicts[r.stem.removeprefix("review-")] = m.group(1) if m else "invalid"
+        out.append((n, gate, verdicts))
+    return out
+
+
+def main(argv):
+    since = None
+    if "--since-last" in argv and MARKER.exists():
+        since = float(MARKER.read_text().strip())
+    jobs = load_jobs(since)
+    lines = [f"# Factory review ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+             f"Scope: {'jobs changed since the last review' if since else 'all jobs'}; {len(jobs)} job(s).", ""]
+    if not jobs:
+        lines.append("Nothing to review.")
+    rev_changes, rev_total, gate_fail, stages = Counter(), Counter(), 0, Counter()
+    per_risk = defaultdict(list)
+    rows = ["| job | issue | risk | end | rounds | gate fails | CHANGES by | cost | time |", "|---|---|---|---|---|---|---|---|---|"]
+    escalations, changes_files = [], []
+    for j in jobs:
+        rs = rounds(j)
+        gfail = sum(1 for _, g, _ in rs if g == "FAIL")
+        gate_fail += gfail
+        by = []
+        for n, _, v in rs:
+            for r, verdict in v.items():
+                rev_total[r] += 1
+                if verdict == "CHANGES":
+                    rev_changes[r] += 1
+                    by.append(f"{r}@{n}")
+                    changes_files.append(str((j["dir"] / f"round-{n}" / f"review-{r}.md").relative_to(FACTORY.parent)))
+        risk = (j.get("intake") or {}).get("risk") or "-"
+        per_risk[risk].append((len(rs), j.get("cost_usd", 0.0)))
+        stages[j["stage"]] += 1
+        end = ts(j["ended"]) if j.get("ended") else datetime.now(timezone.utc).timestamp()
+        mins = int((end - ts(j["started"])) / 60)
+        rows.append(f"| {j['id']} | #{j['issue']} | {risk} | {j['stage']} | {len(rs)} | {gfail} | "
+                    f"{', '.join(by) or '-'} | ${j.get('cost_usd', 0):.2f} | {mins}m |")
+        d = j["dir"] / "decision.md"
+        if first(d) == "ESCALATE" or j["stage"] == "needs-human":
+            escalations.append((j["id"], str(d.relative_to(FACTORY.parent))))
+        fb = len(list(j["dir"].glob("feedback-*.md")))
+        if fb:
+            escalations.append((j["id"], f"{fb} round(s) of user feedback"))
+    if jobs:
+        lines += rows + [""]
+        lines.append("## Totals")
+        lines.append(f"- Jobs by end state: " + ", ".join(f"{k} {v}" for k, v in sorted(stages.items())))
+        multi = sum(1 for j in jobs if len(rounds(j)) > 1)
+        lines.append(f"- Jobs needing more than one round: {multi} of {len(jobs)}")
+        lines.append(f"- Gate failures: {gate_fail}")
+        lines.append("- Review CHANGES rate by lens: " + (", ".join(
+            f"{r} {rev_changes[r]}/{rev_total[r]}" for r in sorted(rev_total)) or "none"))
+        for risk, vals in sorted(per_risk.items()):
+            lines.append(f"- Risk {risk}: {len(vals)} job(s), avg {sum(v[0] for v in vals) / len(vals):.1f} rounds, "
+                         f"avg ${sum(v[1] for v in vals) / len(vals):.2f}")
+        lines += ["", "## Escalations and feedback"] + ([f"- {a}: {b}" for a, b in escalations] or ["- none"])
+        lines += ["", "## Reviews that asked for CHANGES (read these for patterns)"] + ([f"- {f}" for f in changes_files] or ["- none"])
+        ev = sum(1 for j in jobs if (j["dir"] / "events.jsonl").exists())
+        lines += ["", f"Event logs (timestamps per transition) exist for {ev} of {len(jobs)} jobs; older jobs only have final state."]
+    text = "\n".join(lines) + "\n"
+    print(text)
+    if "--out" in argv:
+        out = Path(argv[argv.index("--out") + 1])
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text)
+    MARKER.parent.mkdir(parents=True, exist_ok=True)
+    MARKER.write_text(str(datetime.now(timezone.utc).timestamp()))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

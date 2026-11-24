@@ -1,0 +1,22 @@
+# Project notes for the factory
+
+The factory agents read the section that matches their job. Keep each short.
+
+## Product
+What this project is, who it is for, and what is out of scope. Intake uses this
+to reject requests that belong elsewhere.
+
+## Security hot spots
+Routers, uploads, secrets, tokens, queries built from user input, files that must
+never be committed. The security reviewer checks each against the diff.
+
+## UI conventions
+Where the theme and shared components live, and which component library to prefer.
+
+## Users
+Who uses the product, on what device, and what matters most to them
+(speed, clarity, no lost work, ...).
+
+## Always escalate
+Changes a human must always see before merge (pricing logic, paid third-party
+accounts, data migrations, how secrets are read, ...).

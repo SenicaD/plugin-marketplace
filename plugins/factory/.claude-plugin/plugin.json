@@ -1,0 +1,7 @@
+{
+  "name": "factory",
+  "version": "0.1.0",
+  "description": "Software factory: turns GitHub issues labeled `factory` into reviewed pull requests through intake, spec, build, gate, review and approve.",
+  "author": { "name": "SenicaD" },
+  "keywords": ["factory", "github", "pull-requests", "agents"]
+}

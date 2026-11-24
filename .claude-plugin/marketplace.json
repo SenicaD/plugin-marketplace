@@ -1,0 +1,12 @@
+{
+  "name": "senicad-tools",
+  "description": "Personal Claude Code plugins.",
+  "owner": { "name": "SenicaD" },
+  "plugins": [
+    {
+      "name": "factory",
+      "source": "./plugins/factory",
+      "description": "Software factory: GitHub issues to reviewed PRs through intake, spec, build, gate, review and approve."
+    }
+  ]
+}
