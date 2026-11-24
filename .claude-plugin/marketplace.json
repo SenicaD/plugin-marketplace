@@ -1,12 +1,19 @@
 {
   "name": "senicad-tools",
   "description": "Personal Claude Code plugins.",
-  "owner": { "name": "SenicaD" },
+  "owner": {
+    "name": "SenicaD"
+  },
   "plugins": [
     {
       "name": "factory",
       "source": "./plugins/factory",
       "description": "Software factory: GitHub issues to reviewed PRs through intake, spec, build, gate, review and approve."
+    },
+    {
+      "name": "spec",
+      "source": "./plugins/spec",
+      "description": "Spec writer: turns a proposition into a reviewed spec (docs/specs/<slug>.md) and a GitHub issue."
     }
   ]
 }

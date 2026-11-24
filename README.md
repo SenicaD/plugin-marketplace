@@ -1,6 +1,6 @@
 # senicad-tools
 
-A personal Claude Code marketplace. It currently holds one plugin, **factory**.
+A personal Claude Code marketplace. It holds two plugins, **factory** and **spec**.
 
 ## factory
 
@@ -33,6 +33,17 @@ levels in `plugins/factory/agents/*.md`. Routing, limits, labels and prices are 
 to `factory/config.json` in the repo and edit it; its keys replace the defaults.
 
 State lives in the repo (`factory/jobs/`, `.worktrees/`), never in the plugin.
+
+## spec
+
+`/spec:spec <proposition>` (or just `/spec`) works a proposition into a reviewed spec: it
+reads the repo, asks one batch of scoping questions, drafts, revises with you, saves
+`docs/specs/<slug>.md`, then files a GitHub issue after you confirm. The `factory` label is
+only added if you say so. Works in any repo; needs `gh` for the issue step.
+
+```
+/plugin install spec@senicad-tools
+```
 
 ### Test locally
 

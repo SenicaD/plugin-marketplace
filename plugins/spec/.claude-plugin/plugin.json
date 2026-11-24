@@ -1,0 +1,7 @@
+{
+  "name": "spec",
+  "version": "0.1.0",
+  "description": "Turn a proposition into a reviewed spec with testable acceptance criteria, saved to docs/specs/ and filed as a GitHub issue.",
+  "author": { "name": "SenicaD" },
+  "keywords": ["spec", "requirements", "github", "planning"]
+}
