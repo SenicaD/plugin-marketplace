@@ -1,6 +1,34 @@
 # senicad-tools
 
-A personal Claude Code marketplace. It holds two plugins, **factory** and **spec**.
+A personal Claude Code marketplace. It holds three plugins: **factory**, **spec** and **domain**.
+
+## domain
+
+Company domain knowledge for Claude. The knowledge itself lives in a separate git repo
+(`domain-knowledge`: one markdown note per system, concept, flow or decision); this plugin
+reads it and helps grow it.
+
+```
+/plugin install domain@senicad-tools
+/domain <question>    answer from the notes, citing them; says "not documented" rather than guess
+/domain add <fact>    record a fact in the right note, through a pull request
+/domain curate        turn inbox dumps into proper notes, through a pull request
+/domain sync          update the local clone
+/domain check         validate the notes and the generated index
+```
+
+The skill also triggers on its own when a question needs company-specific facts.
+
+Requires `git`, `gh` (authenticated, with access to the knowledge repo) and `python3` with
+PyYAML. On first use the plugin clones the repo to `~/.cache/domain-knowledge` and
+fast-forwards it at most once an hour. To use a clone you already work in, set
+`DOMAIN_KB_PATH` or write `~/.config/domain/config.json`:
+
+```json
+{ "path": "/path/to/domain-knowledge", "repo": "git@github.com:<org>/domain-knowledge.git" }
+```
+
+A clone with local changes, or on a non-default branch, is never updated.
 
 ## factory
 

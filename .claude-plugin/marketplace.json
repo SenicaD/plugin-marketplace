@@ -14,6 +14,11 @@
       "name": "spec",
       "source": "./plugins/spec",
       "description": "Spec writer: turns a proposition into a reviewed spec (docs/specs/<slug>.md) and a GitHub issue."
+    },
+    {
+      "name": "domain",
+      "source": "./plugins/domain",
+      "description": "Company domain knowledge: look up systems, concepts and flows from the domain-knowledge repo and capture new facts through PRs."
     }
   ]
 }

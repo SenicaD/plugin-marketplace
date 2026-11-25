@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Locate, sync and query the domain-knowledge repo.
+
+Usage:
+  domain-kb path                 print the repo path (clone or update it first)
+  domain-kb sync                 force a clone or update
+  domain-kb lookup <term>        find notes by name, alias or text
+  domain-kb related <slug>       incoming and outgoing relationships
+  domain-kb validate             run the repo's validator
+  domain-kb index [--check]      regenerate (or check) index.md and relationships.md
+
+Location, first match wins:
+  $DOMAIN_KB_PATH, then "path" in ~/.config/domain/config.json,
+  then ~/.cache/domain-knowledge (auto-cloned from "repo" in that config, or the default below).
+An existing clone is fast-forwarded at most once an hour, and only when it is clean and on
+its default branch, so a working clone with local edits is never touched.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+DEFAULT_REPO = "git@github.com:Infinity-Technology-Solutions/domain-knowledge.git"
+CONFIG = Path.home() / ".config" / "domain" / "config.json"
+STALE_SECONDS = 3600
+
+
+def die(msg, code=1):
+    print(f"domain-kb: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def cfg():
+    try:
+        return json.loads(CONFIG.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def git(path, *args, check=True):
+    return subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True, check=check)
+
+
+def resolve():
+    c = cfg()
+    path = os.environ.get("DOMAIN_KB_PATH") or c.get("path") or str(Path.home() / ".cache" / "domain-knowledge")
+    return Path(path).expanduser(), c.get("repo") or DEFAULT_REPO
+
+
+def ensure(force=False):
+    path, repo = resolve()
+    if not (path / ".git").exists():
+        if path.exists() and any(path.iterdir()):
+            die(f"{path} exists and is not a git clone; set DOMAIN_KB_PATH or ~/.config/domain/config.json")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        r = subprocess.run(["git", "clone", "--quiet", repo, str(path)], capture_output=True, text=True)
+        if r.returncode:
+            die(f"could not clone {repo}: {r.stderr.strip()}. Check your GitHub access (gh auth status).")
+        return path
+    stamp = path / ".git" / "domain-kb-synced"
+    fresh = stamp.exists() and time.time() - stamp.stat().st_mtime < STALE_SECONDS
+    if fresh and not force:
+        return path
+    try:
+        default = git(path, "symbolic-ref", "--short", "refs/remotes/origin/HEAD", check=False).stdout.strip().removeprefix("origin/") or "main"
+        branch = git(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        dirty = git(path, "status", "--porcelain").stdout.strip()
+        if branch != default:
+            print(f"domain-kb: {path} is on '{branch}', not '{default}'; not updating", file=sys.stderr)
+        elif dirty:
+            print(f"domain-kb: {path} has local changes; not updating", file=sys.stderr)
+        else:
+            r = git(path, "pull", "--ff-only", "--quiet", check=False)
+            if r.returncode:
+                print(f"domain-kb: update failed, using the local copy: {r.stderr.strip()}", file=sys.stderr)
+            else:
+                stamp.touch()
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"domain-kb: update skipped: {e}", file=sys.stderr)
+    return path
+
+
+def run_tool(path, tool, args):
+    script = path / "tools" / tool
+    if not script.exists():
+        die(f"{script} not found; is {path} the domain-knowledge repo?")
+    sys.exit(subprocess.run([sys.executable, str(script), *args], cwd=path).returncode)
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__)
+        return
+    cmd, rest = argv[0], argv[1:]
+    if cmd == "path":
+        print(ensure())
+    elif cmd == "sync":
+        print(ensure(force=True))
+    elif cmd == "lookup":
+        run_tool(ensure(), "lookup.py", rest)
+    elif cmd == "related":
+        run_tool(ensure(), "lookup.py", ["--related", *rest])
+    elif cmd == "validate":
+        run_tool(ensure(), "validate.py", rest)
+    elif cmd == "index":
+        run_tool(ensure(), "index.py", rest)
+    else:
+        die(f"unknown command '{cmd}'. Try --help.")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

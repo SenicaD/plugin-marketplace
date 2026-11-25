@@ -1,0 +1,7 @@
+{
+  "name": "domain",
+  "version": "0.1.0",
+  "description": "Company domain knowledge: look up systems, concepts and flows from the domain-knowledge repo, and capture new facts through pull requests.",
+  "author": { "name": "SenicaD" },
+  "keywords": ["domain", "knowledge", "documentation"]
+}
